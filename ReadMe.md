@@ -6,7 +6,7 @@
 
 本项目参考https://github.com/Frrrrrrrrank/auto_job__find__chatgpt__rpa?tab=readme-ov-file, 原版只能使用OpenAI 的 LLM 和 Embedding 词嵌入模型 API 接口.
 
-本项目则使用 SiliconFlow 硅基流动的 api, 可实现 DeepSeek, Qwen 等 LLM 模型的调用, 同时使用中文领域表现优异的 [M3E 词嵌入模型 🤗](https://huggingface.co/moka-ai/m3e-base). 实现更广泛的LLM模型和词嵌入模型选择.
+本项目则使用 [SiliconFlow 硅基流动](https://cloud.siliconflow.cn/i/akwXG1GV) 的 API, 可实现 DeepSeek, Qwen 等 LLM 模型的调用, 同时使用中文领域表现优异的 [M3E 词嵌入模型 🤗](https://huggingface.co/moka-ai/m3e-base). 实现更广泛的LLM模型和词嵌入模型选择.
 
 ## 使用方法
 
@@ -18,7 +18,7 @@
 
 4.运行SeleniumRPA.py
 
-5.在自动打开的boss直聘中扫码登录
+5.在自动打开的BOSS直聘中扫码登录
 
 ---
 
@@ -33,11 +33,11 @@ M3E-base词嵌入Embedding模型两种调用方法: (在线 & 离线)
 
 ```Python
 from sentence_transformers import SentenceTransformer
-# 在线调用
-model = SentenceTransformer("moka-ai/m3e-base")
 
-# 将模型下载到本地离线调用
-model = SentenceTransformer(model_name_or_path='D:/m3e-base')
+model = SentenceTransformer("moka-ai/m3e-base")  # 在线调用
+
+model = SentenceTransformer(model_name_or_path='D:/m3e-base')  # 将模型下载到本地离线调用
+# 推荐镜像 https://gitcode.com/mirrors/moka-ai/m3e-base/tree/main
 ```
 
 ---
