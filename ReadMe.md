@@ -6,7 +6,7 @@
 
 本项目参考https://github.com/Frrrrrrrrank/auto_job__find__chatgpt__rpa?tab=readme-ov-file, 原版只能使用OpenAI 的 LLM 和 Embedding 词嵌入模型 API 接口.
 
-本项目则使用 [SiliconFlow 硅基流动](https://cloud.siliconflow.cn/i/akwXG1GV) 的 API, 可实现 DeepSeek, Qwen 等 LLM 模型的调用, 同时使用中文领域表现优异的 [M3E 词嵌入模型 🤗](https://huggingface.co/moka-ai/m3e-base). 实现更广泛的LLM模型和词嵌入模型选择.
+本项目则使用 [SiliconFlow 硅基流动](https://cloud.siliconflow.cn/i/akwXG1GV) 的 API, 可实现 DeepSeek, Qwen 等 LLM 模型的调用; 此外还使用中文领域表现优异的 [M3E 词嵌入模型 🤗](https://huggingface.co/moka-ai/m3e-base). 实现更广泛的LLM模型和词嵌入模型选择; 同时改为使用 PyMuPDF 进行 PDF 解析.
 
 ## 使用方法
 
