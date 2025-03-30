@@ -19,10 +19,24 @@ from langchain.embeddings.base import Embeddings
 from dotenv import load_dotenv
 load_dotenv()
 
+from flask import Flask, request, jsonify
+from flask_cors import CORS  # 允许跨域请求
+
 OPENAI_API_BASE = os.getenv('OPENAI_API_BASE')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 MODEL_NAME = os.getenv('MODEL_NAME')
 CV_PATH = os.getenv("CV_PATH")
+
+
+app = Flask(__name__)  # 初始化Flask应用
+CORS(app)  # 允许跨域请求
+
+# 全局变量保存预处理结果
+CV_CONTEXT, CV_VECTORSTORE = None, None
+
+# 预加载标志
+CV_PRELOADED = False
+
 
 class M3EEmbedding(Embeddings):  # 定义 M3EEmbedding 类
     def __init__(self, model):
@@ -94,16 +108,65 @@ def Generate_Context(CV_text, CV_Embedding, JD):
     return letter
 
 
+def initialize_rag_system():
+    """同步初始化函数"""
+    global CV_CONTEXT, CV_VECTORSTORE, CV_PRELOADED
+    if CV_PRELOADED:
+        return
+    
+    try:
+        if not os.path.exists(CV_PATH):
+            raise FileNotFoundError(f"未找到简历文件: {CV_PATH}")
+        
+        CV_CONTEXT, CV_VECTORSTORE = Parse_Embed_CV(CV_PATH)
+        CV_PRELOADED = True
+        print(f"✅ 简历预处理完成: {CV_PATH}")
+        
+    except Exception as e:
+        print(f"❌ 初始化失败: {str(e)}")
+        raise
+
+
+# # 立即执行初始化（替代before_first_request）
+# with app.app_context():
+#     initialize_rag_system()
+
+
+@app.route('/generate', methods=['POST'])
+def handle_generation():
+    try:
+        if not CV_PRELOADED:
+            return jsonify({'error': '简历未加载'}), 503
+            
+        jd_data = request.get_json()
+        if not jd_data or 'jd' not in jd_data:
+            return jsonify({'error': '需要提供岗位描述(jd)'}), 400
+            
+        letter = Generate_Context(CV_CONTEXT, CV_VECTORSTORE, jd_data['jd'])
+        return jsonify({'result': letter.strip()}), 200
+    
+    except Exception as e:
+        return jsonify({'error': '生成失败: ' + str(e)}), 500
+
+
 if __name__ == '__main__':
-    JD = """
-        一、工作内容
-        1、机械设备智能化、自动化方面项目需求分析、系统设计及核心代码的编写，解决项目开发过程中的技术问题；
-        2.算法设计：针对具体应用场景，设计算法并提升其效果/效率/稳定性
-        二、任职条件：
-        1.计算机/自动化/电子信息/数学/等工科相关专业，本科及以上学历，有2年以上软件开发经验；
-        2.熟练掌握C/C++/Matlab/Python/GoLang至少一种，动手能力强；
-        3.熟悉常用CV库和深度学习框架（Caffe/PyTorch/TensorFlow等）；
-    """  # 用于测试
-    CV_context, CV_Embedding = Parse_Embed_CV(CV_PATH)
-    Letter = Generate_Context(CV_context, CV_Embedding, JD)
-    print(Letter)
+    # 确保即使在非主线程环境下也会加载
+    if not CV_PRELOADED:
+        initialize_rag_system()
+    
+    from waitress import serve
+    print(f"🚀 服务已启动: http://localhost:5000/generate")
+    app.run(host='0.0.0.0', port=5000)
+
+    # JD = """
+    #     一、工作内容
+    #     1、机械设备智能化、自动化方面项目需求分析、系统设计及核心代码的编写，解决项目开发过程中的技术问题；
+    #     2.算法设计：针对具体应用场景，设计算法并提升其效果/效率/稳定性
+    #     二、任职条件：
+    #     1.计算机/自动化/电子信息/数学/等工科相关专业，本科及以上学历，有2年以上软件开发经验；
+    #     2.熟练掌握C/C++/Matlab/Python/GoLang至少一种，动手能力强；
+    #     3.熟悉常用CV库和深度学习框架（Caffe/PyTorch/TensorFlow等）；
+    # """  # 用于测试
+    # CV_context, CV_Embedding = Parse_Embed_CV(CV_PATH)
+    # Letter = Generate_Context(CV_context, CV_Embedding, JD)
+    # print(Letter)
