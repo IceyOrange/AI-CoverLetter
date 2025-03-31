@@ -26,7 +26,17 @@
 
 2.在目录下运行 `pip install -r requirements.txt` 安装所需包
 
-3.在.env文件中配置好 **API 接口**及**秘钥**, **模型全称**, **pdf简历文件路径**(扫描版pdf请自行加入OCR操作)
+3.创建.env文件并在其中配置好 **API 接口**及**秘钥**, **模型**和**pdf简历文件路径**(扫描版pdf请自行加入OCR操作)
+
+```
+OPENAI_API_BASE = "https://api.siliconflow.cn/v1"  # API url
+
+OPENAI_API_KEY = "youe own API key"  # API-key
+
+MODEL_NAME = "Qwen/QwQ-32B"  # "Qwen/Qwen2.5-32B-Instruct", "deepseek-ai/DeepSeek-R1"等
+
+CV_PATH = "C:\\Users\\11938\\Desktop\\Resume\\Resume.pdf"  # PDF简历路径
+```
 
 4.将`智能求职信生成器-5.2.0.user.js`中的代码粘贴进油猴脚本的代码编辑器里面
 
