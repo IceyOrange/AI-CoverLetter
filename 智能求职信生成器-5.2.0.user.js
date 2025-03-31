@@ -1,10 +1,12 @@
 // ==UserScript==
-// @name         BOSS直聘智能求职信生成器Pro
+// @name         智能求职信生成器
 // @namespace    http://tampermonkey.net/
-// @version      3.0
+// @version      5.2.0
 // @description  带可视化面板的智能求职信生成系统
-// @author       Your Name
+// @author       IceyOrange
 // @match        https://www.zhipin.com/*
+// @match        https://www.liepin.com/*
+// @match        https://jobs.51job.com/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // ==/UserScript==
@@ -19,7 +21,11 @@
         uiPosition: { right: '30px', top: '100px' },
         uiAnimation: {
             foldSpeed: 0.3,// 折叠动画速度(s)
-            maxHeight: 600// 最大展开高度
+            maxHeight: 300// 最大展开高度
+        },
+        drag: {
+            minX: 20,// 窗口离屏最小保留距离
+            dragHandle: '.smart-header'
         }
     };
 
@@ -45,17 +51,21 @@
         }
         .smart-title {
             margin: 0;
-            font-size: 18px;
+            font-size: 14px;
             color: #212529;
             font-weight: 600;
         }
         .smart-body {
             padding: 16px;
-            max-height: 70vh;
+            max-height: 60vh;
             overflow-y: auto;
         }
+        .smart-body::-webkit-scrollbar {
+            width: 8px; /* 垂直滚动条宽度 */
+            height: 8px; /* 水平滚动条高度 */
+        }
         .jd-preview {
-            font-size: 14px;
+            font-size: 12px;
             color: #495057;
             white-space: pre-wrap;
             line-height: 1.6;
@@ -63,8 +73,12 @@
             border-radius: 8px;
             padding: 12px;
             margin-bottom: 16px;
-            max-height: 200px;
+            max-height: 150px;
             overflow-y: auto;
+        }
+        .jd-preview::-webkit-scrollbar {
+            width: 8px; /* 垂直滚动条宽度 */
+            height: 8px; /* 水平滚动条高度 */
         }
         .generate-btn {
             width: 100%;
@@ -72,9 +86,9 @@
             background: #268dff;
             color: white;
             border: none;
-            border-radius: 8px;
+            border-radius: 6px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 12px;
             transition: background 0.2s;
         }
         .generate-btn:hover {
@@ -86,7 +100,7 @@
         }
         .result-area {
             display: none;
-            font-size: 14px;
+            font-size: 12px;
             line-height: 1.6;
             white-space: pre-wrap;
             padding: 12px;
@@ -98,6 +112,7 @@
             text-align: center;
             padding: 12px;
             color: #6c757d;
+            font-size: 12px;
         }
         /* 新增折叠动效 */
         .smart-assistant.collapsed .smart-body {
@@ -122,15 +137,37 @@
             margin-top: 12px;
         }
         .copy-btn {
-            padding: 6px 12px;
-            background: #e9ecef;
-            border-radius: 4px;
+            position: relative;
+            padding: 6px 16px;
+            background: linear-gradient(145deg, #268dff, #1a73e8);
+            color: white !important;
+            border: none;
+            border-radius: 20px;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.3s;
+            box-shadow: 0 2px 8px rgba(39, 141, 255, 0.2);
+            font-size: 13px;
         }
+        .copy-btn::before {
+            content: "⎘";
+            margin-right: 6px;
+            filter: drop-shadow(0 1px 1px rgba(0,0,0,0.1));
+        }
+
         .copy-btn:hover {
-            background: #dee2e6;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(39, 141, 255, 0.3);
         }
+
+        .copy-btn.copied {
+            background: linear-gradient(145deg, #00c853, #009624);
+            box-shadow: 0 2px 8px rgba(0, 200, 83, 0.2);
+        }
+
+        .copy-btn.copied::before {
+            content: "✓";
+        }
+
         /* 优化结果区域 */
         .result-box {
             position: relative;
@@ -138,6 +175,7 @@
             border-radius: 8px;
             padding: 12px;
             margin-top: 12px;
+            max-height: 150px;
         }
         .result-actions {
             position: absolute;
@@ -154,10 +192,129 @@
     let currentJD = null;
     let isProcessing = false;
 
+    // 网站选择器映射表
+    const SELECTOR_MAP = {
+        'www.zhipin.com': { // BOSS直聘
+            jd: 'div.job-detail-body p.desc',
+            //title: 'h1.job-title',
+            //company: 'div.company-info a.name'
+        },
+        'www.liepin.com': { // 猎聘
+            jd: 'section.job-intro-container dd',
+        },
+        'jobs.51job.com': {
+            jd: 'div.bmsg.job_msg.inbox',
+        }
+        // 可继续扩展其他网站
+    };
+
+
+    const initDragSystem = (container) => {
+        let isDragging = false;
+        let startX = 0, startY = 0, initialLeft = 0, initialTop = 0;
+        const dragHandle = container.querySelector(CONFIG.drag.dragHandle);
+
+        const clampPosition = (value, min, max) =>
+        Math.max(min, Math.min(value, window.innerWidth - max));
+        const onMouseDown = (e) => {
+            isDragging = true;
+            const rect = container.getBoundingClientRect();
+            startX = e.clientX;
+            startY = e.clientY;
+            initialLeft = rect.left;
+            initialTop = rect.top;
+
+            container.style.transition = 'none'; // 拖拽时禁用动画
+            document.body.style.userSelect = 'none'; // 防止文字选中
+        };
+        const onMouseMove = (e) => {
+            if (!isDragging) return;
+
+            const deltaX = e.clientX - startX;
+            const deltaY = e.clientY - startY;
+
+            const newLeft = clampPosition(
+                initialLeft + deltaX,
+                CONFIG.drag.minX,
+                container.offsetWidth
+            );
+
+            const newTop = clampPosition(
+                initialTop + deltaY,
+                CONFIG.drag.minX,
+                container.offsetHeight
+            );
+            container.style.left = `${newLeft}px`;
+            container.style.top = `${newTop}px`;
+        };
+        const onMouseUp = () => {
+            isDragging = false;
+            container.style.transition = '';
+            document.body.style.userSelect = '';
+        };
+        dragHandle.addEventListener('mousedown', onMouseDown);
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    };
+
+    const handleCopy = (content) => {
+        const typeMap = {
+            success: { text: '✓ 已复制', style: 'copied' },
+            error: { text: '! 失败', style: 'error' }
+        };
+        return () => {
+            const copyAction = () => {
+                try {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = content.replace(/(\n\s*){2,}/g, '\n'); // 清除多余空行
+                    textarea.style.position = 'fixed';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+
+                    const success = document.execCommand('copy');
+                    document.body.removeChild(textarea);
+
+                    return success ? 'success' : 'error';
+                } catch (e) {
+                    return 'error';
+                }
+            };
+            const status = copyAction();
+            const { text, style } = typeMap[status];
+            const btn = event.currentTarget;
+
+            // 添加状态反馈
+            btn.classList.add(style);
+            btn.disabled = true;
+
+            setTimeout(() => {
+                btn.classList.remove(style);
+                btn.disabled = false;
+            }, 2000);
+        };
+    };
+
+    const getSelector = (key) => {
+        const domain = window.location.hostname;
+        const selectors = SELECTOR_MAP[domain];
+
+        if (!selectors) {
+            throw new Error(`未找到 ${domain} 的选择器配置`);
+        }
+
+        const selector = selectors[key];
+        if (!selector) {
+            throw new Error(`未找到 ${domain} 的 ${key} 选择器`);
+        }
+
+        return selector;
+    };
+
     // 智能JD扫描器 ==============================
     const initJDTracker = () => {
         const scanJD = () => {
-            const jdElement = document.querySelector('div.job-detail-body p.desc');
+
+            const jdElement = document.querySelector(getSelector('jd'));
             if (jdElement) {
                 const newJD = jdElement.innerText
                     .replace(/\s+/g, ' ')
@@ -189,7 +346,6 @@
         </div>
         <div class="smart-body" style="max-height:${CONFIG.uiAnimation.maxHeight}px;transition:all ${CONFIG.uiAnimation.foldSpeed}s ease-out">
             <div class="jd-section">
-                <div class="jd-title">捕获JD</div>
                 <div class="jd-preview">${currentJD || '正在扫描岗位描述...'}</div>
             </div>
             <button class="generate-btn">生成定制求职信</button>
@@ -205,8 +361,6 @@
         document.body.appendChild(container);
         return container;
     };
-
-
 
     // 动态UI更新器 ==============================
     const updateUI = () => {
@@ -270,46 +424,61 @@
     };
 
     const showResult = (container, data) => {
+        // 清空已有内容
         const resultArea = container.querySelector('.result-area');
-        // 防御性访问嵌套属性
-        const content = data?.result || data?.response?.result;
-
-        if (!content) {
-            throw new Error('无效响应结构');
-        }
-
         resultArea.innerHTML = '';
         // 创建富文本展示模块
         const resultBox = document.createElement('div');
         resultBox.className = 'result-box';
-
         // 插入带格式的内容（保留换行）
-        resultBox.innerHTML = (content || '')
+        const resultContent = document.createElement('div');
+        resultContent.className = 'result-content';
+        resultContent.innerHTML = (data?.result || '')
             .replace(/\\n/g, '<br>')
             .replace(/```html/g, '')
             .replace(/```/g, '');
+        resultBox.appendChild(resultContent);
         // 添加悬浮工具条
         const toolBar = document.createElement('div');
         toolBar.className = 'result-actions';
-        toolBar.innerHTML = `
-            <button class="copy-btn" title="复制内容">⎘ 复制</button>
-        `;
-        // 绑定复制功能
-        toolBar.querySelector('.copy-btn').addEventListener('click', () => {
-            const tempEl = document.createElement('textarea');
-            tempEl.value = resultBox.innerText;
-            document.body.appendChild(tempEl);
-            tempEl.select();
-            document.execCommand('copy');
-            document.body.removeChild(tempEl);
-
-            // 视觉反馈
-            const btn = toolBar.querySelector('.copy-btn');
-            btn.textContent = '✓ 已复制';
+        // 创建现代化复制按钮
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'copy-btn';
+        copyBtn.textContent = ' 复制内容';
+        // 绑定优化后的复制处理
+        copyBtn.addEventListener('click', () => {
+            const typeMap = {
+                success: { text: '✓ 已复制', style: 'copied' },
+                error: { text: '! 失败', style: 'error' }
+            };
+            const copyAction = () => {
+                try {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = resultContent.innerText.replace(/(\n\s*){2,}/g, '\n'); // 清除多余空行
+                    textarea.style.position = 'fixed';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    const success = document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    return success ? 'success' : 'error';
+                } catch (e) {
+                    return 'error';
+                }
+            };
+            const status = copyAction();
+            const { text, style } = typeMap[status];
+            // 添加状态反馈
+            copyBtn.classList.add(style);
+            copyBtn.disabled = true;
+            setTimeout(() => {
+                copyBtn.classList.remove(style);
+                copyBtn.disabled = false;
+            }, 2000);
         });
         // 组装组件
-        resultBox.prepend(toolBar);
-        resultArea.append(resultBox);
+        toolBar.appendChild(copyBtn);
+        resultBox.appendChild(toolBar);
+        resultArea.appendChild(resultBox);
         resultArea.style.display = 'block';
     };
 
@@ -322,12 +491,14 @@
 
     // 初始化流程 ================================
     const init = () => {
-        if (!document.querySelector('div.job-detail-body')) {
+        if (!document.querySelector(getSelector('jd'))) {
             setTimeout(init, CONFIG.scanInterval);
             return;
         }
 
+        console.log('开始初始化');
         const uiContainer = createAssistantUI();
+        initDragSystem(uiContainer);
         initJDTracker();
 
         // 绑定生成事件

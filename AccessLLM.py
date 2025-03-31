@@ -5,8 +5,6 @@
 # @Time    :   2025/02/25 09:26:53
 
 import os
-os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
-
 import fitz  # PyMuPDF
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from sentence_transformers import SentenceTransformer
@@ -15,18 +13,18 @@ from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 from langchain.embeddings.base import Embeddings
-# from langchain_community.llms import Ollama
 from dotenv import load_dotenv
-load_dotenv()
-
 from flask import Flask, request, jsonify
 from flask_cors import CORS  # 允许跨域请求
+from waitress import serve
+
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+load_dotenv()
 
 OPENAI_API_BASE = os.getenv('OPENAI_API_BASE')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 MODEL_NAME = os.getenv('MODEL_NAME')
 CV_PATH = os.getenv("CV_PATH")
-
 
 app = Flask(__name__)  # 初始化Flask应用
 CORS(app)  # 允许跨域请求
@@ -75,7 +73,7 @@ def Generate_Context(CV_text, CV_Embedding, JD):
     character_limit = 300  # 字数限制
     
     langchain_prompt_template = f"""
-        你将扮演一位求职者的角色,根据上下文里的简历内容以及应聘工作的描述,来直接给HR写一个礼貌专业, 且字数严格限制在{character_limit}以内的求职消息,要求能够用专业的语言结合简历中的经历和技能,并结合应聘工作的描述,来阐述自己的优势,尽最大可能打动招聘者。始终使用中文来进行消息的编写。开头是招聘负责人, 结尾附上求职者邮箱。这是一份求职消息，不要包含求职内容以外的东西,例如“根据您上传的求职要求和个人简历,我来帮您起草一封求职邮件：”这一类的内容，也不要此致敬礼等类似过于正式的落款, 邮箱后面不要有任何内容! 不要用Markdown格式输出, 我不想被HR看出来是使用AI生成的这段文字。
+        你将扮演一位求职者的角色,根据上下文里的简历内容以及应聘工作的描述,来直接给HR写一个礼貌专业, 且字数严格限制在{character_limit}以内的求职消息,要求能够用专业的语言结合简历中的经历和技能,并结合应聘工作的描述,来阐述自己的优势,尽最大可能打动招聘者。始终使用中文来进行消息的编写。开头是招聘负责人, 结尾附上求职者邮箱。这是一份求职消息，不要包含求职内容以外的东西,例如“根据您上传的求职要求和个人简历,我来帮您起草一封求职邮件：”这一类的内容，也不要此致敬礼等类似过于正式的落款, 邮箱后面不要有任何内容! 使用纯文本输出，不要用Markdown格式输出,；我不想被HR看出来是使用AI生成的这段文字。
         工作描述:
         {JD}"""+"""
         简历内容:
@@ -127,11 +125,6 @@ def initialize_rag_system():
         raise
 
 
-# # 立即执行初始化（替代before_first_request）
-# with app.app_context():
-#     initialize_rag_system()
-
-
 @app.route('/generate', methods=['POST'])
 def handle_generation():
     try:
@@ -154,7 +147,6 @@ if __name__ == '__main__':
     if not CV_PRELOADED:
         initialize_rag_system()
     
-    from waitress import serve
     print(f"🚀 服务已启动: http://localhost:5000/generate")
     app.run(host='0.0.0.0', port=5000)
 
