@@ -341,7 +341,7 @@
         container.className = 'smart-assistant';
         container.innerHTML = `
         <div class="smart-header">
-            <h3 class="smart-title">📮 BOSS求职信Pro</h3>
+            <h3 class="smart-title">📮 智能求职信生成器</h3>
             <svg class="fold-indicator" width="24" height="24" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
         </div>
         <div class="smart-body" style="max-height:${CONFIG.uiAnimation.maxHeight}px;transition:all ${CONFIG.uiAnimation.foldSpeed}s ease-out">
